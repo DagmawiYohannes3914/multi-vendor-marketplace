@@ -1,0 +1,15 @@
+Django>=4.2,<5
+djangorestframework
+djangorestframework-simplejwt
+django-filter
+channels
+daphne
+psycopg2-binary
+redis
+celery
+django-cors-headers
+drf-spectacular
+boto3
+django-storages
+python-dotenv
+
