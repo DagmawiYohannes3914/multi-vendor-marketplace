@@ -13,6 +13,7 @@ ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split("
 
 # Application definition
 INSTALLED_APPS = [
+    "jazzmin",              
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -103,6 +104,7 @@ USE_TZ = True
 # Static & Media
 STATIC_URL = "/static/"
 MEDIA_URL = "/media/"
+STATICFILES_DIRS = []
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_ROOT = BASE_DIR / "media"
 
@@ -131,3 +133,22 @@ SIMPLE_JWT = {
 
 # CORS
 CORS_ALLOW_ALL_ORIGINS = True
+
+JAZZMIN_SETTINGS = {
+    "site_title": "Multi-Vendor Marketplace Admin",
+    "site_header": "Marketplace Admin",
+    "site_brand": "Marketplace",
+    "welcome_sign": "Welcome to Marketplace Admin",
+    "copyright": "Dag © 2025",
+    "show_ui_builder": True,  # show theme switcher in UI
+    "search_model": ["auth.User", "accounts.Profile"],
+
+    "topmenu_links": [
+        {"name": "Dashboard", "url": "admin:index", "permissions": ["auth.view_user"]},
+        {"name": "Users", "model": "auth.User"},
+        {"name": "Accounts", "app": "accounts"},
+    ],
+    
+    "show_sidebar": True,
+    "navigation_expanded": True,
+}

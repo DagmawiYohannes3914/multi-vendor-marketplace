@@ -12,4 +12,4 @@ drf-spectacular
 boto3
 django-storages
 python-dotenv
-
+django-jazzmin

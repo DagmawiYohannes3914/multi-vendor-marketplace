@@ -43,6 +43,7 @@ services:
     command: celery -A marketplace worker -l info
     volumes:
       - ./backend:/app
+      - ./staticfiles:/app/staticfiles
     env_file:
       - .env
     depends_on:
@@ -52,3 +53,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
+
+
