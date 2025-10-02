@@ -30,8 +30,6 @@ INSTALLED_APPS = [
     "channels",
 
     # local apps (we’ll create them soon)
-    "rest_framework",
-    "rest_framework.authtoken",
     "accounts",
 ]
 
