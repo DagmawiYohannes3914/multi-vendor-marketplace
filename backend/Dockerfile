@@ -16,6 +16,9 @@ COPY ./requirements.txt /app/requirements.txt
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
+RUN pip install djangorestframework djangorestframework-simplejwt
+
+
 # copy app code (mounted in dev via docker-compose volumes)
 COPY . /app
 

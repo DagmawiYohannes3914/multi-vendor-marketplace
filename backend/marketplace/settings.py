@@ -30,11 +30,14 @@ INSTALLED_APPS = [
     "channels",
 
     # local apps (we’ll create them soon)
+    "rest_framework",
+    "rest_framework.authtoken",
     "accounts",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
