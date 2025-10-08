@@ -29,7 +29,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "channels",
 
-    # local apps (we’ll create them soon)
+    # local apps
     "accounts",
 ]
 

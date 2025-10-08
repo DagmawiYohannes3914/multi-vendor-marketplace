@@ -1,7 +1,5 @@
-from django.contrib.auth.models import User
-from rest_framework import generics
-from rest_framework.permissions import AllowAny
 from rest_framework.serializers import ModelSerializer
+from .models import User
 
 # Temporary serializer for registering users
 class UserSerializer(ModelSerializer):
@@ -17,17 +15,3 @@ class UserSerializer(ModelSerializer):
             password=validated_data["password"],
         )
         return user
-
-
-class RegisterView(generics.CreateAPIView):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = [AllowAny]
-
-
-class ProfileView(generics.RetrieveAPIView):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-
-    def get_object(self):
-        return self.request.user
