@@ -14,3 +14,4 @@ django-storages
 python-dotenv
 django-jazzmin
 whitenoise
+Pillow
