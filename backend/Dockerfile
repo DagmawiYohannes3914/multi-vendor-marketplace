@@ -5,9 +5,10 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# system deps for psycopg2 and other builds
+# system deps for psycopg2, Pillow, and other builds
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends build-essential libpq-dev gcc git curl && \
+    apt-get install -y --no-install-recommends build-essential libpq-dev gcc git curl \
+    libjpeg-dev libpng-dev libtiff-dev zlib1g-dev libfreetype6-dev liblcms2-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # copy only requirements first for layer caching
@@ -15,6 +16,9 @@ COPY ./requirements.txt /app/requirements.txt
 
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
+
+# Explicitly install Pillow with system dependencies
+RUN pip install --no-cache-dir Pillow
 
 RUN pip install djangorestframework djangorestframework-simplejwt
 
