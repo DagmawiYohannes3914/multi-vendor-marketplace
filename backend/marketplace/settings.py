@@ -153,6 +153,10 @@ SIMPLE_JWT = {
 # CORS
 CORS_ALLOW_ALL_ORIGINS = True
 
+# Authentication
+LOGIN_REDIRECT_URL = '/admin/'
+LOGOUT_REDIRECT_URL = '/admin/login/'
+
 JAZZMIN_SETTINGS = {
     "site_title": "Multi-Vendor Marketplace Admin",
     "site_header": "Marketplace Admin",
