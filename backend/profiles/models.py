@@ -1,9 +1,11 @@
 from django.db import models
 from django.contrib.auth import get_user_model
+import uuid
 
 User = get_user_model()
 
 class VendorProfile(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='vendor_profile')
     store_name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
@@ -18,6 +20,7 @@ class VendorProfile(models.Model):
 
 
 class CustomerProfile(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='customer_profile')
     address = models.CharField(max_length=255, blank=True)
     phone = models.CharField(max_length=20, blank=True)

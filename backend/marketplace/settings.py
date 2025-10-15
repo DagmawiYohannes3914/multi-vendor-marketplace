@@ -25,13 +25,16 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework.authtoken",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     "drf_spectacular",
     "channels",
+    "django_filters",
 
     # local apps
     "accounts",
     "profiles",
+    "products",
 ]
 
 MIDDLEWARE = [
@@ -68,19 +71,21 @@ WSGI_APPLICATION = "marketplace.wsgi.application"
 ASGI_APPLICATION = "marketplace.asgi.application"
 
 # Database
-# Use SQLite for local development if DATABASE_URL is not set
+# Use PostgreSQL for Docker, fallback to SQLite for local development
 if os.getenv("DATABASE_URL"):
+    # Docker environment with PostgreSQL
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("POSTGRES_DB"),
-            "USER": os.getenv("POSTGRES_USER"),
-            "PASSWORD": os.getenv("POSTGRES_PASSWORD"),
+            "NAME": os.getenv("POSTGRES_DB", "marketplace"),
+            "USER": os.getenv("POSTGRES_USER", "marketplace"),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD", "marketplace"),
             "HOST": os.getenv("DATABASE_HOST", "db"),
             "PORT": os.getenv("DATABASE_PORT", "5432"),
         }
     }
 else:
+    # Local development with SQLite
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
