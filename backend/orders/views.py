@@ -6,13 +6,16 @@ from django.utils import timezone
 from django.http import HttpResponse
 from datetime import timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 import os
 import json
 
-from products.models import SKU, InventoryTransaction
+from products.models import SKU, InventoryTransaction, BulkDiscount
 from profiles.permissions import IsCustomer
-from .models import Cart, CartItem, Reservation, Order, OrderItem, VendorOrder
-from .serializers import CartSerializer, CartItemSerializer, OrderSerializer
+from .models import Cart, CartItem, Reservation, Order, OrderItem, VendorOrder, Coupon
+from .serializers import CartSerializer, CartItemSerializer, OrderSerializer, CouponSerializer
+from notifications.utils import create_notification
+from .receipts import order_receipt_json
 
 try:
     import stripe
@@ -115,13 +118,57 @@ class CartViewSet(viewsets.ViewSet):
 
 
 class CheckoutView(APIView):
-    permission_classes = [IsCustomer]
+    permission_classes = []  # Allow unauthenticated access for guest checkout
 
     def post(self, request):
-        cart = get_or_create_cart(request.user)
-        items = list(cart.items.select_related("sku", "sku__product"))
-        if not items:
-            return Response({"detail": "Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
+        # Handle guest checkout
+        is_guest = request.data.get('is_guest', False)
+        cart = None  # Initialize cart variable for both paths
+        
+        if is_guest:
+            # Create a temporary cart for guest checkout
+            guest_email = request.data.get('guest_email')
+            guest_items = request.data.get('items', [])
+            
+            if not guest_email:
+                return Response({"detail": "Guest email is required"}, status=status.HTTP_400_BAD_REQUEST)
+                
+            if not guest_items:
+                return Response({"detail": "No items provided"}, status=status.HTTP_400_BAD_REQUEST)
+                
+            # Process guest items - create SimpleNamespace objects to mimic CartItem objects
+            items = []
+            for item_data in guest_items:
+                try:
+                    sku = SKU.objects.get(id=item_data.get('sku_id'))
+                    quantity = int(item_data.get('quantity', 1))
+                    
+                    # Check stock availability
+                    reserved = Reservation.active_reserved_quantity(sku)
+                    available = max(0, sku.stock_quantity - reserved)
+                    if quantity > available:
+                        return Response({"detail": f"Insufficient stock for {sku.sku_code}"}, 
+                                        status=status.HTTP_400_BAD_REQUEST)
+                    
+                    # Create a SimpleNamespace object that mimics CartItem structure
+                    items.append(SimpleNamespace(
+                        sku=sku,
+                        quantity=quantity,
+                        unit_price=sku.product.price + (sku.price_adjustment or Decimal("0"))
+                    ))
+                except SKU.DoesNotExist:
+                    return Response({"detail": f"SKU not found"}, status=status.HTTP_400_BAD_REQUEST)
+                except Exception as e:
+                    return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            # Regular user checkout
+            if not request.user.is_authenticated:
+                return Response({"detail": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
+                
+            cart = get_or_create_cart(request.user)
+            items = list(cart.items.select_related("sku", "sku__product"))
+            if not items:
+                return Response({"detail": "Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Get payment method from request
         payment_method = request.data.get("payment_method", "stripe")
@@ -135,15 +182,60 @@ class CheckoutView(APIView):
             if item.quantity > available:
                 return Response({"detail": f"Insufficient stock for {item.sku.sku_code}"}, status=status.HTTP_400_BAD_REQUEST)
 
-        order = Order.objects.create(
-            user=request.user, 
-            status="pending", 
-            currency="usd",
-            payment_method=payment_method
-        )
+        # Check for coupon code
+        coupon = None
+        coupon_code = request.data.get("coupon_code")
+        discount_amount = Decimal("0")
+        
+        if coupon_code:
+            try:
+                coupon = Coupon.objects.get(code=coupon_code)
+                if coupon.is_valid():
+                    # Calculate cart total first to check coupon validity
+                    cart_total = sum(item.quantity * item.unit_price for item in items)
+                    if cart_total >= coupon.min_purchase_amount:
+                        discount_amount = coupon.calculate_discount(cart_total)
+                        # Increment coupon usage
+                        coupon.current_uses += 1
+                        coupon.save()
+            except Coupon.DoesNotExist:
+                pass  # Invalid coupon, just ignore
+        
+        # Create order with guest information if applicable
+        order_data = {
+            'status': "pending",
+            'currency': "usd",
+            'payment_method': payment_method,
+            'coupon': coupon,
+            'discount_amount': discount_amount,
+            'shipping_address': request.data.get('shipping_address', {})
+        }
+        
+        if is_guest:
+            order_data.update({
+                'is_guest': True,
+                'guest_email': request.data.get('guest_email'),
+                'guest_name': request.data.get('guest_name', ''),
+                'guest_phone': request.data.get('guest_phone', '')
+            })
+        else:
+            order_data['user'] = request.user
+            
+        order = Order.objects.create(**order_data)
         vendor_orders = {}
         total = Decimal("0")
+        vendor_items = {}  # Track items by vendor for bulk discount calculation
 
+        # First pass: group items by vendor
+        for item in items:
+            product = item.sku.product
+            vendor = product.vendor
+            
+            if vendor.id not in vendor_items:
+                vendor_items[vendor.id] = []
+            vendor_items[vendor.id].append(item)
+
+        # Second pass: process items with bulk discounts
         for item in items:
             product = item.sku.product
             vendor = product.vendor
@@ -151,17 +243,46 @@ class CheckoutView(APIView):
             if not vo:
                 vo = VendorOrder.objects.create(order=order, vendor=vendor, status="pending")
                 vendor_orders[vendor.id] = vo
-            line_total = item.unit_price * item.quantity
+            
+            # Apply bulk discount if applicable
+            unit_price = item.unit_price
+            vendor_quantity = sum(i.quantity for i in vendor_items[vendor.id])
+            
+            # Find applicable bulk discount
+            bulk_discount = BulkDiscount.objects.filter(
+                vendor=vendor,
+                is_active=True,
+                min_quantity__lte=vendor_quantity
+            ).order_by('-min_quantity').first()
+            
+            if bulk_discount:
+                discount_multiplier = Decimal(1) - (bulk_discount.discount_percentage / Decimal(100))
+                unit_price = (unit_price * discount_multiplier).quantize(Decimal('0.01'))
+            
+            line_total = unit_price * item.quantity
             total += line_total
-            OrderItem.objects.create(order=order, vendor_order=vo, sku=item.sku, product=product, quantity=item.quantity, unit_price=item.unit_price)
+            OrderItem.objects.create(order=order, vendor_order=vo, sku=item.sku, product=product, 
+                                    quantity=item.quantity, unit_price=unit_price)
 
-            # Convert reservation to sale and adjust stock
-            Reservation.objects.filter(sku=item.sku, user=request.user, cart=cart, status="active").update(status="converted")
+            # Convert reservation to sale and adjust stock (only for registered users with reservations)
+            if not is_guest and request.user.is_authenticated and cart:
+                Reservation.objects.filter(sku=item.sku, user=request.user, cart=cart, status="active").update(status="converted")
+            
+            # Deduct stock for all orders
             item.sku.stock_quantity = max(0, item.sku.stock_quantity - item.quantity)
             item.sku.save()
-            InventoryTransaction.objects.create(sku=item.sku, transaction_type="sale", quantity=-item.quantity, reference=str(order.id), notes="Checkout")
+            InventoryTransaction.objects.create(
+                sku=item.sku, 
+                transaction_type="sale", 
+                quantity=-item.quantity, 
+                reference=str(order.id), 
+                notes="Checkout - Guest" if is_guest else "Checkout",
+                created_by=request.user if request.user.is_authenticated else None
+            )
 
-        order.total_amount = total
+        # Set subtotal and apply discount
+        order.subtotal_amount = total
+        order.total_amount = max(Decimal("0"), total - order.discount_amount)
         order.save()
 
         # Handle payment based on selected method
@@ -188,13 +309,65 @@ class CheckoutView(APIView):
             # Order remains in pending status until delivery and payment
             pass
 
-        # Clear cart
-        cart.items.all().delete()
+        # Clear cart for registered users
+        if not is_guest and request.user.is_authenticated:
+            cart.items.all().delete()
 
         data = OrderSerializer(order).data
         if client_secret:
             data["client_secret"] = client_secret
         return Response(data, status=status.HTTP_201_CREATED)
+
+
+class OrderViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = OrderSerializer
+    permission_classes = [IsCustomer]
+    
+    def get_queryset(self):
+        return Order.objects.filter(user=self.request.user)
+    
+    @action(detail=True, methods=['get'])
+    def receipt(self, request, pk=None):
+        order = self.get_object()
+        return order_receipt_json(order)
+
+
+class CouponViewSet(viewsets.ModelViewSet):
+    queryset = Coupon.objects.all()
+    serializer_class = CouponSerializer
+    permission_classes = [permissions.IsAdminUser]  # Only admins can manage coupons
+    
+    @action(detail=False, methods=['post'], permission_classes=[IsCustomer])
+    def validate(self, request):
+        code = request.data.get('code')
+        if not code:
+            return Response({'detail': 'Coupon code is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            coupon = Coupon.objects.get(code=code)
+            if not coupon.is_valid():
+                return Response({'detail': 'Coupon is not valid'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get cart total to check minimum purchase amount
+            cart = get_or_create_cart(request.user)
+            cart_total = sum(item.quantity * item.unit_price for item in cart.items.all())
+            
+            if cart_total < coupon.min_purchase_amount:
+                return Response({
+                    'detail': f'Minimum purchase amount of {coupon.min_purchase_amount} not met'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            discount = coupon.calculate_discount(cart_total)
+            
+            return Response({
+                'coupon': CouponSerializer(coupon).data,
+                'discount': str(discount),
+                'cart_total': str(cart_total),
+                'final_total': str(cart_total - discount)
+            })
+            
+        except Coupon.DoesNotExist:
+            return Response({'detail': 'Invalid coupon code'}, status=status.HTTP_404_NOT_FOUND)
 
 
 class StripeConfigView(APIView):
@@ -253,6 +426,17 @@ class StripeWebhookView(APIView):
                     
                     # Update vendor orders status too
                     VendorOrder.objects.filter(order=order).update(status="paid")
+                    
+                    # Send payment confirmation notification (only for registered users)
+                    if order.user:
+                        create_notification(
+                            user=order.user,
+                            notification_type='payment_status',
+                            title='Payment Confirmed',
+                            message=f'Your payment for order #{order.id} has been confirmed.',
+                            reference_id=str(order.id)
+                        )
+                    # For guest orders, you could send email notification here instead
                     
                     return Response({"status": "payment processed", "order": str(order.id)})
         

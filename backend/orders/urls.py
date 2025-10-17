@@ -1,9 +1,11 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import CartViewSet, CheckoutView, StripeWebhookView, StripeConfigView
+from .views import CartViewSet, CheckoutView, StripeWebhookView, StripeConfigView, CouponViewSet, OrderViewSet
 
 router = DefaultRouter()
 router.register(r'cart', CartViewSet, basename='cart')
+router.register(r'coupons', CouponViewSet, basename='coupons')
+router.register(r'orders', OrderViewSet, basename='orders')
 
 urlpatterns = [
     path('', include(router.urls)),

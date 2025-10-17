@@ -5,11 +5,12 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Avg
 
-from .models import Category, Product, ProductImage, SKU, InventoryTransaction, ProductRating
+from .models import Category, Product, ProductImage, SKU, InventoryTransaction, ProductRating, Wishlist, BulkDiscount, ProductComment
 from .serializers import (
     CategorySerializer, CategoryTreeSerializer, ProductSerializer, 
     ProductCreateUpdateSerializer, ProductImageSerializer, SKUSerializer,
-    InventoryTransactionSerializer, ProductRatingSerializer
+    InventoryTransactionSerializer, ProductRatingSerializer, WishlistSerializer,
+    BulkDiscountSerializer, ProductCommentSerializer
 )
 from .permissions import IsVendorAndOwner
 from profiles.permissions import IsVendor, IsCustomer
@@ -153,16 +154,124 @@ class ProductRatingView(generics.CreateAPIView, generics.ListAPIView):
         product_id = self.kwargs.get('product_id')
         return ProductRating.objects.filter(product_id=product_id)
     
-    def perform_create(self, serializer):
+    def create(self, request, *args, **kwargs):
+        """Override create to add validation before saving"""
         product_id = self.kwargs.get('product_id')
-        product = Product.objects.get(id=product_id)
+        
+        try:
+            product = Product.objects.get(id=product_id)
+        except Product.DoesNotExist:
+            return Response(
+                {"detail": "Product not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
         
         # Check if user has already rated this product
-        existing_rating = ProductRating.objects.filter(product=product, user=self.request.user).first()
+        existing_rating = ProductRating.objects.filter(product=product, user=request.user).first()
         if existing_rating:
             return Response(
                 {"detail": "You have already rated this product."},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        serializer.save(product=product, user=self.request.user)
+        # Continue with normal creation
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(product=product, user=request.user)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class WishlistViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for managing wishlists.
+    """
+    serializer_class = WishlistSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        """Return wishlists for the current user only"""
+        return Wishlist.objects.filter(user=self.request.user)
+    
+    @action(detail=True, methods=['post'])
+    def add_product(self, request, pk=None):
+        """Add a product to the wishlist"""
+        wishlist = self.get_object()
+        product_id = request.data.get('product_id')
+        
+        if not product_id:
+            return Response({"detail": "Product ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            product = Product.objects.get(id=product_id)
+            wishlist.products.add(product)
+            return Response({"detail": "Product added to wishlist"}, status=status.HTTP_200_OK)
+        except Product.DoesNotExist:
+            return Response({"detail": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
+    
+    @action(detail=True, methods=['post'])
+    def remove_product(self, request, pk=None):
+        """Remove a product from the wishlist"""
+        wishlist = self.get_object()
+        product_id = request.data.get('product_id')
+        
+        if not product_id:
+            return Response({"detail": "Product ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            product = Product.objects.get(id=product_id)
+            wishlist.products.remove(product)
+            return Response({"detail": "Product removed from wishlist"}, status=status.HTTP_200_OK)
+        except Product.DoesNotExist:
+            return Response({"detail": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+class BulkDiscountViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for managing bulk discounts.
+    """
+    serializer_class = BulkDiscountSerializer
+    permission_classes = [IsVendor]
+    
+    def get_queryset(self):
+        """
+        Return bulk discounts for the current vendor only, or all active discounts for customers
+        """
+        if hasattr(self.request.user, 'vendorprofile'):
+            # Vendors see only their own discounts
+            return BulkDiscount.objects.filter(vendor=self.request.user.vendorprofile)
+        # Customers see all active discounts
+        return BulkDiscount.objects.filter(is_active=True)
+    
+    @action(detail=False, methods=['get'])
+    def vendor_discounts(self, request):
+        """Return all active bulk discounts for a specific vendor"""
+        vendor_id = request.query_params.get('vendor_id')
+        if not vendor_id:
+            return Response({"detail": "Vendor ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        discounts = BulkDiscount.objects.filter(vendor_id=vendor_id, is_active=True)
+        serializer = self.get_serializer(discounts, many=True)
+        return Response(serializer.data)
+
+
+class ProductCommentViewSet(viewsets.ModelViewSet):
+    serializer_class = ProductCommentSerializer
+    queryset = ProductComment.objects.filter(is_approved=True)
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['product']
+    
+    def get_permissions(self):
+        if self.action in ['create']:
+            return []  # Allow anyone to create comments (guests included)
+        return [permissions.IsAuthenticated()]
+    
+    @action(detail=False, methods=['get'])
+    def product_comments(self, request):
+        product_id = request.query_params.get('product_id')
+        if not product_id:
+            return Response({"error": "Product ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        comments = ProductComment.objects.filter(product_id=product_id, is_approved=True)
+        serializer = self.get_serializer(comments, many=True)
+        return Response(serializer.data)
