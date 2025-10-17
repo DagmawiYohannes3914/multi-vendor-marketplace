@@ -16,3 +16,4 @@ django-jazzmin
 whitenoise
 Pillow
 django-mptt
+stripe
