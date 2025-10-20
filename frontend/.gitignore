@@ -9,6 +9,7 @@ coverage/
 .vercel/
 .eslintcache
 
+
 # Logs
 *.log
 npm-debug.log*
@@ -36,3 +37,5 @@ Thumbs.db
 # Misc
 .sass-cache/
 .cache-loader/
+
+*.md
