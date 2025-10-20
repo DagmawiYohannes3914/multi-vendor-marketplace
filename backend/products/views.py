@@ -44,23 +44,15 @@ class ProductViewSet(viewsets.ModelViewSet):
     ordering_fields = ['name', 'price', 'created_at']
     ordering = ['-created_at']
     
-    def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            return [permissions.AllowAny()]
-        return [IsVendorAndOwner()]
-    
     def get_queryset(self):
         # For list and retrieve actions, show all active products to everyone
         if self.action in ['list', 'retrieve']:
-            if self.request.user.is_authenticated and hasattr(self.request.user, 'vendorprofile'):
-                # Vendors see only their own products
-                return Product.objects.filter(vendor=self.request.user.vendorprofile)
-            # Public users see all active products
+            # Everyone (including vendors) see all active products for browsing
             return Product.objects.filter(is_active=True)
         
         # For other actions (create, update, delete), vendors only see their own products
-        if self.request.user.is_authenticated and hasattr(self.request.user, 'vendorprofile'):
-            return Product.objects.filter(vendor=self.request.user.vendorprofile)
+        if self.request.user.is_authenticated and hasattr(self.request.user, 'vendor_profile'):
+            return Product.objects.filter(vendor=self.request.user.vendor_profile)
         return Product.objects.none()
         
     
@@ -87,11 +79,11 @@ class ProductImageView(generics.CreateAPIView, generics.DestroyAPIView):
     permission_classes = [IsVendorAndOwner]
     
     def get_queryset(self):
-        return ProductImage.objects.filter(product__vendor=self.request.user.vendorprofile)
+        return ProductImage.objects.filter(product__vendor=self.request.user.vendor_profile)
     
     def perform_create(self, serializer):
         product_id = self.request.data.get('product')
-        product = Product.objects.get(id=product_id, vendor=self.request.user.vendorprofile)
+        product = Product.objects.get(id=product_id, vendor=self.request.user.vendor_profile)
         serializer.save(product=product)
 
 class SKUViewSet(viewsets.ModelViewSet):
@@ -107,20 +99,20 @@ class SKUViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         if self.action in ['list', 'retrieve']:
-            if self.request.user.is_authenticated and hasattr(self.request.user, 'vendorprofile'):
+            if self.request.user.is_authenticated and hasattr(self.request.user, 'vendor_profile'):
                 # Vendors see all SKUs for their products
-                return SKU.objects.filter(product__vendor=self.request.user.vendorprofile)
+                return SKU.objects.filter(product__vendor=self.request.user.vendor_profile)
             # Public users see all SKUs for active products
             return SKU.objects.filter(product__is_active=True)
         
         # For other actions, vendors only see SKUs for their own products
-        if self.request.user.is_authenticated and hasattr(self.request.user, 'vendorprofile'):
-            return SKU.objects.filter(product__vendor=self.request.user.vendorprofile)
+        if self.request.user.is_authenticated and hasattr(self.request.user, 'vendor_profile'):
+            return SKU.objects.filter(product__vendor=self.request.user.vendor_profile)
         return SKU.objects.none()
     
     def perform_create(self, serializer):
         product_id = self.request.data.get('product')
-        product = Product.objects.get(id=product_id, vendor=self.request.user.vendorprofile)
+        product = Product.objects.get(id=product_id, vendor=self.request.user.vendor_profile)
         serializer.save(product=product)
 
 class InventoryTransactionViewSet(viewsets.ModelViewSet):
@@ -131,11 +123,11 @@ class InventoryTransactionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsVendorAndOwner]
     
     def get_queryset(self):
-        return InventoryTransaction.objects.filter(sku__product__vendor=self.request.user.vendorprofile)
+        return InventoryTransaction.objects.filter(sku__product__vendor=self.request.user.vendor_profile)
     
     def perform_create(self, serializer):
         sku_id = self.request.data.get('sku')
-        sku = SKU.objects.get(id=sku_id, product__vendor=self.request.user.vendorprofile)
+        sku = SKU.objects.get(id=sku_id, product__vendor=self.request.user.vendor_profile)
         serializer.save(sku=sku, created_by=self.request.user)
         
         # Update the SKU stock quantity
@@ -237,9 +229,9 @@ class BulkDiscountViewSet(viewsets.ModelViewSet):
         """
         Return bulk discounts for the current vendor only, or all active discounts for customers
         """
-        if hasattr(self.request.user, 'vendorprofile'):
+        if hasattr(self.request.user, 'vendor_profile'):
             # Vendors see only their own discounts
-            return BulkDiscount.objects.filter(vendor=self.request.user.vendorprofile)
+            return BulkDiscount.objects.filter(vendor=self.request.user.vendor_profile)
         # Customers see all active discounts
         return BulkDiscount.objects.filter(is_active=True)
     

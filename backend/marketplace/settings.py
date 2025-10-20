@@ -9,7 +9,7 @@ load_dotenv(os.path.join(BASE_DIR.parent, ".env"))
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "insecure-secret-key")
 DEBUG = os.getenv("DJANGO_DEBUG", "True") == "True"
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost,testserver").split(",")
 
 # Application definition
 INSTALLED_APPS = [

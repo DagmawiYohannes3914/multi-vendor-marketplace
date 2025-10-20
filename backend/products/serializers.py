@@ -59,7 +59,7 @@ class ProductCreateUpdateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         # Set the vendor based on the authenticated user's vendor profile
         user = self.context['request'].user
-        validated_data['vendor'] = user.vendorprofile
+        validated_data['vendor'] = user.vendor_profile
         
         # Generate a slug from the name
         from django.utils.text import slugify

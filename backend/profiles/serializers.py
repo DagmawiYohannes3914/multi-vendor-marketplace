@@ -47,3 +47,17 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
         model = CustomerProfile
         fields = ['id', 'user_id', 'username', 'first_name', 'last_name', 'address', 'phone', 'preferences', 'created_at', 'updated_at']
         read_only_fields = ['id', 'user_id', 'username', 'first_name', 'last_name', 'created_at', 'updated_at']
+
+
+class PublicVendorProfileSerializer(serializers.ModelSerializer):
+    """
+    Public-facing vendor profile serializer with safe fields only.
+    Used for displaying vendor information to customers.
+    """
+    username = serializers.CharField(source='user.username', read_only=True)
+    
+    class Meta:
+        model = VendorProfile
+        fields = ['id', 'username', 'store_name', 'description', 'logo', 
+                 'average_rating', 'total_reviews', 'created_at']
+        read_only_fields = fields

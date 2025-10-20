@@ -1,10 +1,13 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from rest_framework import generics, viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import VendorProfile, CustomerProfile, VendorReview
-from .serializers import VendorProfileSerializer, CustomerProfileSerializer, VendorReviewSerializer
+from .serializers import (
+    VendorProfileSerializer, CustomerProfileSerializer, 
+    VendorReviewSerializer, PublicVendorProfileSerializer
+)
 from .permissions import IsVendor, IsCustomer
 
 # Create your views here.
@@ -21,6 +24,17 @@ class CustomerProfileView(generics.RetrieveUpdateAPIView):
     
     def get_object(self):
         return CustomerProfile.objects.get(user=self.request.user)
+
+
+class PublicVendorProfileView(generics.RetrieveAPIView):
+    """
+    Public endpoint to retrieve vendor profile information by ID.
+    Available to all users (authenticated or not).
+    """
+    serializer_class = PublicVendorProfileSerializer
+    permission_classes = [AllowAny]
+    queryset = VendorProfile.objects.all()
+    lookup_field = 'pk'
 
 
 class VendorReviewViewSet(viewsets.ModelViewSet):

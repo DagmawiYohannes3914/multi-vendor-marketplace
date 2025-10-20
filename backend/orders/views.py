@@ -115,6 +115,16 @@ class CartViewSet(viewsets.ViewSet):
         Reservation.objects.filter(sku=item.sku, user=request.user, cart=cart, status="active").update(status="released")
         item.delete()
         return Response(CartSerializer(cart).data)
+    
+    @action(detail=False, methods=["post"])
+    def clear(self, request):
+        """Clear all items from the cart"""
+        cart = get_or_create_cart(request.user)
+        # Release all reservations
+        Reservation.objects.filter(user=request.user, cart=cart, status="active").update(status="released")
+        # Delete all cart items
+        cart.items.all().delete()
+        return Response(CartSerializer(cart).data)
 
 
 class CheckoutView(APIView):
