@@ -3,11 +3,12 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/store/auth-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { User, Mail, Badge as BadgeIcon } from 'lucide-react';
+import { User, Mail, Badge as BadgeIcon, Star, TrendingUp, Gift, Copy, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function ProfilePage() {
@@ -29,6 +30,47 @@ export default function ProfilePage() {
     },
     enabled: isAuthenticated,
   });
+
+  const { data: loyaltyPoints } = useQuery({
+    queryKey: ['loyalty-points'],
+    queryFn: async () => {
+      const response = await apiClient.getMyLoyaltyPoints();
+      return response.data;
+    },
+    enabled: isAuthenticated && user?.is_customer,
+  });
+
+  const { data: referralData } = useQuery({
+    queryKey: ['referral-program'],
+    queryFn: async () => {
+      const response = await apiClient.getReferralProgram();
+      return response.data;
+    },
+    enabled: isAuthenticated,
+  });
+
+  const handleCopyReferralCode = () => {
+    if (referralData?.referral_code) {
+      navigator.clipboard.writeText(referralData.referral_code);
+      toast.success('Referral code copied to clipboard!');
+    }
+  };
+
+  const handleShareReferral = () => {
+    if (referralData?.referral_code) {
+      const shareUrl = `${window.location.origin}/register?ref=${referralData.referral_code}`;
+      if (navigator.share) {
+        navigator.share({
+          title: 'Join our marketplace!',
+          text: `Use my referral code: ${referralData.referral_code}`,
+          url: shareUrl,
+        });
+      } else {
+        navigator.clipboard.writeText(shareUrl);
+        toast.success('Referral link copied to clipboard!');
+      }
+    }
+  };
 
   if (!isAuthenticated) {
     router.push('/auth/login');
@@ -163,6 +205,98 @@ export default function ProfilePage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Loyalty Points */}
+          {user?.is_customer && loyaltyPoints && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Star className="h-5 w-5 text-yellow-500" />
+                  Loyalty Points
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <p className="text-4xl font-bold text-cyan-600">
+                      {loyaltyPoints.total_points || 0}
+                    </p>
+                    <p className="text-sm text-muted-foreground">Available Points</p>
+                  </div>
+                  
+                  {loyaltyPoints.points_used > 0 && (
+                    <div className="flex items-center justify-between rounded-lg bg-muted p-3">
+                      <span className="text-sm text-muted-foreground">Points Used</span>
+                      <span className="font-medium">{loyaltyPoints.points_used}</span>
+                    </div>
+                  )}
+                  
+                  <Button variant="outline" className="w-full" asChild>
+                    <Link href="/account/loyalty-points">
+                      <TrendingUp className="mr-2 h-4 w-4" />
+                      View History
+                    </Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Referral Program */}
+          {referralData && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Gift className="h-5 w-5 text-purple-500" />
+                  Refer & Earn
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="rounded-lg bg-purple-50 p-4 dark:bg-purple-900/20">
+                    <p className="text-sm font-medium text-purple-900 dark:text-purple-100">
+                      Your Referral Code
+                    </p>
+                    <p className="mt-2 text-2xl font-bold text-purple-600">
+                      {referralData.referral_code}
+                    </p>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3 text-center">
+                    <div className="rounded-lg bg-muted p-3">
+                      <p className="text-2xl font-bold">{referralData.total_referrals || 0}</p>
+                      <p className="text-xs text-muted-foreground">Referrals</p>
+                    </div>
+                    <div className="rounded-lg bg-muted p-3">
+                      <p className="text-2xl font-bold">{referralData.successful_referrals || 0}</p>
+                      <p className="text-xs text-muted-foreground">Successful</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={handleCopyReferralCode}
+                    >
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copy Code
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={handleShareReferral}
+                    >
+                      <Share2 className="mr-2 h-4 w-4" />
+                      Share
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>

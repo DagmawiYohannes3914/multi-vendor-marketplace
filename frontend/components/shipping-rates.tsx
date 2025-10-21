@@ -5,6 +5,7 @@ import { apiClient } from '@/lib/api-client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Truck, Clock } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
+import { addBusinessDays, format } from 'date-fns';
 
 interface ShippingRatesProps {
   selectedRate: string | null;
@@ -19,6 +20,17 @@ export function ShippingRates({ selectedRate, onSelectRate }: ShippingRatesProps
       return response.data;
     },
   });
+
+  const calculateDeliveryDate = (minDays: number, maxDays: number) => {
+    const today = new Date();
+    const minDate = addBusinessDays(today, minDays);
+    const maxDate = addBusinessDays(today, maxDays);
+    
+    if (minDays === maxDays) {
+      return `Arrives by ${format(maxDate, 'EEE, MMM d')}`;
+    }
+    return `Arrives ${format(minDate, 'MMM d')} - ${format(maxDate, 'MMM d')}`;
+  };
 
   if (isLoading) {
     return (
@@ -72,11 +84,14 @@ export function ShippingRates({ selectedRate, onSelectRate }: ShippingRatesProps
                 {formatPrice(rate.base_cost)}
               </p>
             </div>
-            <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-              <Clock className="h-4 w-4" />
-              <span>
-                Estimated delivery: {rate.min_delivery_days}-{rate.max_delivery_days} business days
-              </span>
+            <div className="mt-2 space-y-1">
+              <div className="flex items-center gap-2 text-sm font-medium text-cyan-600 dark:text-cyan-400">
+                <Clock className="h-4 w-4" />
+                <span>{calculateDeliveryDate(rate.min_delivery_days, rate.max_delivery_days)}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {rate.min_delivery_days}-{rate.max_delivery_days} business days
+              </p>
             </div>
           </div>
         </label>

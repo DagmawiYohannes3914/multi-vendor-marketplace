@@ -13,6 +13,7 @@ interface ReturnRequestDialogProps {
   orderNumber: string;
   vendorOrderId: string;
   orderItems: any[];
+  vendorName?: string;
   onClose: () => void;
   onSuccess?: () => void;
 }
@@ -31,6 +32,7 @@ export function ReturnRequestDialog({
   orderNumber,
   vendorOrderId,
   orderItems,
+  vendorName,
   onClose,
   onSuccess,
 }: ReturnRequestDialogProps) {
@@ -69,15 +71,26 @@ export function ReturnRequestDialog({
     },
   });
 
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (files.length + images.length > 5) {
+    
+    // Validate file sizes
+    const oversizedFiles = files.filter(f => f.size > MAX_FILE_SIZE);
+    const validFiles = files.filter(f => f.size <= MAX_FILE_SIZE);
+    
+    if (oversizedFiles.length > 0) {
+      toast.error(`${oversizedFiles.length} image(s) exceed 5MB limit and were skipped`);
+    }
+    
+    if (validFiles.length + images.length > 5) {
       toast.error('Maximum 5 images allowed');
       return;
     }
 
-    setImages((prev) => [...prev, ...files]);
-    const newPreviewUrls = files.map((file) => URL.createObjectURL(file));
+    setImages((prev) => [...prev, ...validFiles]);
+    const newPreviewUrls = validFiles.map((file) => URL.createObjectURL(file));
     setPreviewUrls((prev) => [...prev, ...newPreviewUrls]);
   };
 
@@ -129,6 +142,11 @@ export function ReturnRequestDialog({
           <CardTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
             Request Return - Order #{orderNumber}
+            {vendorName && (
+              <span className="text-base font-normal text-muted-foreground">
+                from {vendorName}
+              </span>
+            )}
           </CardTitle>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-5 w-5" />
@@ -204,7 +222,7 @@ export function ReturnRequestDialog({
                 Add Photos (Optional but Recommended)
               </label>
               <p className="text-xs text-muted-foreground">
-                Photos help us process your return faster (max 5)
+                Photos help us process your return faster. Max 5 images, 5MB each.
               </p>
               
               <div className="flex flex-wrap gap-4">

@@ -40,6 +40,8 @@ export default function ReturnsPage() {
       return response.data;
     },
     enabled: isAuthenticated,
+    refetchInterval: 30000, // Poll every 30 seconds
+    refetchIntervalInBackground: false, // Only when tab is active
   });
 
   if (!isAuthenticated) {
@@ -48,6 +50,9 @@ export default function ReturnsPage() {
   }
 
   const returnsList = Array.isArray(returns) ? returns : returns?.results || [];
+  const hasActiveReturns = returnsList.some((r: any) => 
+    ['pending', 'approved'].includes(r.status)
+  );
 
   return (
     <div className="container py-8">
@@ -66,6 +71,18 @@ export default function ReturnsPage() {
           Track and manage your return requests
         </p>
       </div>
+
+      {/* Active Polling Indicator */}
+      {hasActiveReturns && !isLoading && (
+        <div className="mb-6 rounded-lg bg-blue-50 p-4 text-sm dark:bg-blue-900/20">
+          <p className="font-medium text-blue-900 dark:text-blue-100">
+            🔄 Tracking active returns...
+          </p>
+          <p className="mt-1 text-blue-700 dark:text-blue-300">
+            Status updates automatically every 30 seconds
+          </p>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="space-y-4">

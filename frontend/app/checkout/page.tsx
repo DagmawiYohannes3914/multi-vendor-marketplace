@@ -518,6 +518,7 @@ export default function CheckoutPage() {
                 onClick={handleCheckout}
                 disabled={
                   checkoutMutation.isPending ||
+                  !selectedShippingRate ||
                   (isAuthenticated
                     ? !selectedAddress
                     : !guestEmail ||
@@ -529,8 +530,18 @@ export default function CheckoutPage() {
                       !guestShipping.postal_code)
                 }
               >
-                {checkoutMutation.isPending ? 'Processing...' : 'Place Order'}
+                {checkoutMutation.isPending 
+                  ? 'Processing...' 
+                  : !selectedShippingRate 
+                    ? 'Select Shipping Method' 
+                    : 'Place Order'}
               </Button>
+
+              {!selectedShippingRate && !checkoutMutation.isPending && (
+                <p className="mt-2 text-center text-sm text-orange-600 dark:text-orange-400">
+                  Please select a shipping method to continue
+                </p>
+              )}
 
               <p className="text-xs text-center text-muted-foreground">
                 By placing your order, you agree to our terms and conditions

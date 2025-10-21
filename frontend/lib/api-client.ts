@@ -422,6 +422,24 @@ class APIClient {
   async getStripeConfig() {
     return this.client.get('/orders/payments/stripe/config/');
   }
+
+  // Loyalty Points
+  async getLoyaltyPoints() {
+    return this.client.get('/products/loyalty-points/');
+  }
+
+  async getMyLoyaltyPoints() {
+    return this.client.get('/products/loyalty-points/my_points/');
+  }
+
+  // Referral Program
+  async getReferralProgram() {
+    return this.client.get('/products/referrals/my_referral/');
+  }
+
+  async getReferralStats() {
+    return this.client.get('/products/referrals/stats/');
+  }
 }
 
 export const apiClient = new APIClient();

@@ -132,23 +132,25 @@ export default function OrdersPage() {
                         Cancel Order
                       </Button>
                     )}
-                    {canReturnOrder(order) && order.vendor_orders?.[0] && (
+                    {canReturnOrder(order) && order.vendor_orders?.map((vendorOrder: any, index: number) => (
                       <Button
+                        key={vendorOrder.id}
                         variant="outline"
                         size="sm"
                         onClick={() =>
                           setReturnOrderData({
                             orderId: order.id,
                             orderNumber: order.id.slice(0, 8),
-                            vendorOrderId: order.vendor_orders[0].id,
-                            orderItems: order.vendor_orders[0].items || [],
+                            vendorOrderId: vendorOrder.id,
+                            orderItems: vendorOrder.items || [],
+                            vendorName: vendorOrder.vendor?.store_name || `Vendor ${index + 1}`,
                           })
                         }
                       >
                         <RotateCcw className="mr-2 h-4 w-4" />
-                        Return Items
+                        Return from {vendorOrder.vendor?.store_name || `Vendor ${index + 1}`}
                       </Button>
-                    )}
+                    ))}
                   </div>
                 </div>
               </CardContent>
